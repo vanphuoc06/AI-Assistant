@@ -323,7 +323,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default=r"c:\Users\ADMIN\OneDrive\Documents\Documents\AI\Thi cuộc thi\AI-Guru1\R2AIStage1DATA.json",
+        default="data/R2AIStage1DATA.json",
         help="Đường dẫn file dataset JSONL hoặc JSON",
     )
     parser.add_argument(
