@@ -40,9 +40,56 @@ The system is built with **FastAPI** (backend) and **Streamlit** (frontend), int
 4. **Generation (`src/generation`)**: Constructs context-aware prompts with length protection. Streams responses via **Ollama** running `Qwen2.5:7b-instruct`.
 5. **Caching (`src/core/cache.py`)**: Uses **Redis** to cache LLM responses and manage async background task statuses (e.g., file upload progress).
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/NamSyntax/vietnamese-rag-system/master/docs/RAGSystemArchitecture.png" width="95%"/>
-</p>
+```mermaid
+graph TD
+    subgraph Frontend
+        UI[Streamlit UI]
+    end
+
+    subgraph Backend [FastAPI Backend]
+        API[FastAPI Server]
+        Cache[(Redis Cache)]
+    end
+
+    subgraph Ingestion [1. Ingestion Pipeline]
+        Doc[PDF Document]
+        Parse[PyMuPDF Parsing]
+        Segment[Underthesea Segmentation]
+        Embed[BGE-M3 Embedding]
+    end
+
+    subgraph Retrieval [3. Retrieval Pipeline]
+        Expand[Query Expansion]
+        Hybrid[Hybrid Search Dense + Sparse]
+        Rerank[BGE-Reranker-v2-m3]
+        Filter[Diversity Filter]
+    end
+
+    subgraph Database
+        Qdrant[(Qdrant Vector DB)]
+    end
+
+    subgraph Generation [4. Generation]
+        LLM[Ollama: Qwen2.5:7b-instruct]
+    end
+
+    %% Ingestion Flow
+    Doc --> Parse --> Segment --> Embed --> Qdrant
+
+    %% Query Flow
+    UI -->|Upload / Chat| API
+    API <--> Cache
+    
+    API -->|User Query| Expand
+    Expand --> Hybrid
+    Hybrid <--> Qdrant
+    Hybrid -->|Top K| Rerank
+    Rerank -->|Refined Top K| Filter
+    
+    Filter -->|Filtered Context| LLM
+    LLM -->|Stream Response| API
+    API -->|Display| UI
+```
 
 ## Key Design Insights
 
@@ -105,8 +152,10 @@ This system is not just a RAG implementation — it is built around several crit
 3. **Start required services:**
    Ensure Docker and Ollama are running, then pull the necessary models:
    ```bash
-   # Run Qdrant and Redis via Docker
-   docker run -d -p 6333:6333 qdrant/qdrant
+   # Run Qdrant via Docker Compose (recommended for persistence)
+   docker compose up -d
+   
+   # Run Redis via Docker
    docker run -d -p 6379:6379 redis
    
    # Pull the local LLM
@@ -126,7 +175,18 @@ This system is not just a RAG implementation — it is built around several crit
 
 ## Usage
 
-Open http://localhost:8501 to upload a PDF and start querying.
+1. **Start the FastAPI Backend:**
+   ```bash
+   uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+   ```
+
+2. **Start the Streamlit Frontend (in a new terminal):**
+   ```bash
+   uv run streamlit run src/ui/streamlit_app.py
+   ```
+
+3. **Access the Web UI:**
+   Open [http://localhost:8501](http://localhost:8501) in your browser to upload a PDF and start querying.
 
 ## 🏆 Cuộc thi AI-Guru: Hướng dẫn nộp bài (Submission Pipeline)
 
