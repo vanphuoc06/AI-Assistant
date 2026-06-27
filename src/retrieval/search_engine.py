@@ -66,30 +66,19 @@ class RAGRetriever:
 
             task = self.client.query_points(
                 collection_name=collection_name,
-                prefetch=[
-                    models.Prefetch(
-                        query=dense_query,
-                        using="dense",
-                        limit=max(20, top_k * 2),
-                    ),
-                    models.Prefetch(
-                        query=models.SparseVector(
-                            indices=sparse_query["indices"],
-                            values=sparse_query["values"],
-                        ),
-                        using="bm25",
-                        limit=max(20, top_k * 2),
-                    ),
-                ],
-                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                query=dense_query,
+                using="dense",
                 limit=max(20, top_k * 2),
                 with_payload=True,
             )
             search_tasks.append(task)
 
         try:
-            # receive results in parallel
-            results = await asyncio.gather(*search_tasks)
+            # receive results sequentially to avoid overloading Qdrant
+            results = []
+            for task in search_tasks:
+                res = await task
+                results.append(res)
             for response in results:
                 for hit in response.points:
                     if hit.id not in all_hits or hit.score > all_hits[hit.id].score:
