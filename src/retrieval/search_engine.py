@@ -21,7 +21,7 @@ def remove_accents(text: str) -> str:
 # main rag retriever class
 class RAGRetriever:
     def __init__(self):
-        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False, timeout=60.0)
+        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False, timeout=300.0)
         logger.info("Loading BGE-M3 (Embedding)...")
         self.embed_model = ModelManager.get_embed_model()
 
@@ -88,11 +88,8 @@ class RAGRetriever:
             search_tasks.append(task)
 
         try:
-            # receive results sequentially to avoid overloading Qdrant
-            results = []
-            for task in search_tasks:
-                res = await task
-                results.append(res)
+            # receive results in parallel
+            results = await asyncio.gather(*search_tasks)
             for response in results:
                 for hit in response.points:
                     if hit.id not in all_hits or hit.score > all_hits[hit.id].score:
