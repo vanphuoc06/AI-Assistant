@@ -66,8 +66,22 @@ class RAGRetriever:
 
             task = self.client.query_points(
                 collection_name=collection_name,
-                query=dense_query,
-                using="dense",
+                prefetch=[
+                    models.Prefetch(
+                        query=dense_query,
+                        using="dense",
+                        limit=max(20, top_k * 2),
+                    ),
+                    models.Prefetch(
+                        query=models.SparseVector(
+                            indices=sparse_query["indices"],
+                            values=sparse_query["values"],
+                        ),
+                        using="bm25",
+                        limit=max(20, top_k * 2),
+                    ),
+                ],
+                query=models.FusionQuery(fusion=models.Fusion.RRF),
                 limit=max(20, top_k * 2),
                 with_payload=True,
             )
