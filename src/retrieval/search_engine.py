@@ -1,186 +1,157 @@
-"""
-search_engine.py
-================
-Hybrid RAG Retriever sử dụng Qdrant Named Vectors:
-  - dense        : Qwen3-Embedding-8B (4096 chiều, Cosine)
-  - text_sparse  : BM25 sparse vector (blake2b hash IDs)
-
-Luồng:
-  1. Query Expansion  — tạo nhiều biến thể câu hỏi
-  2. Encode           — dense + sparse song song
-  3. Qdrant Search    — gửi hybrid query (dense + sparse)
-  4. Rerank           — CrossEncoder để sắp xếp lại kết quả
-  5. Diversity Filter — loại bỏ tài liệu quá giống nhau
-"""
-
 import logging
-import asyncio
-import unicodedata
-
 import torch
+import unicodedata
+import asyncio
 import numpy as np
 from qdrant_client import models, AsyncQdrantClient
 from sentence_transformers import CrossEncoder
 
-from src.core.model_manager import ModelManager, build_query_sparse_vector
+from src.utils.nlp_utils import segment_vietnamese
+from src.core.model_manager import ModelManager
 from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
+# remove text accents
 def remove_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
 
-# ── RAG Retriever ─────────────────────────────────────────────────────────────
-
+# main rag retriever class
 class RAGRetriever:
     def __init__(self):
-        self.client = AsyncQdrantClient(
-            host=settings.QDRANT_HOST,
-            port=settings.QDRANT_PORT,
-            api_key=settings.QDRANT_API_KEY,
-            https=False,
-        )
-
-        logger.info("Loading Qwen3 Legal Embedding model ...")
+        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False)
+        logger.info("Loading BGE-M3 (Embedding)...")
         self.embed_model = ModelManager.get_embed_model()
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info("Loading CrossEncoder reranker on %s ...", device)
+        logger.info(f"Loading Reranker on device: {device}...")
         self.reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device)
 
-    def _expand_query(self, query: str) -> list[str]:
-        """Tạo các biến thể của câu hỏi để tăng recall."""
-        variants = {
-            query.strip(),
-            query.lower().strip(),
-            remove_accents(query).strip(),
-        }
-        return [q for q in variants if q]
+    def _expand_query(self, query: str):
+        queries = {query.strip(), query.lower().strip(), remove_accents(query).strip()}
+        return list(q for q in queries if q)  # return list to keep index order
 
+    def _normalize_sparse(self, sparse_dict):
+        if not sparse_dict:
+            return {"indices": [], "values": []}
+        max_val = max(sparse_dict.values()) or 1.0
+        indices = []
+        values = []
+        # sort to ensure deterministic ordering (not strictly required by Qdrant but good practice)
+        for k, v in sorted(sparse_dict.items(), key=lambda x: int(x[0])):
+            indices.append(int(k))
+            values.append(float(v / max_val))
+        return {"indices": indices, "values": values}
+
+    # async hybrid search
     async def search(
-        self,
-        query: str,
-        collection_name: str,
-        top_k: int = 5,
-        score_threshold: float = 0.0,
-    ) -> list[dict]:
-        """
-        Hybrid search: Dense (Qwen3 4096-dim) + Sparse (BM25 hash).
-        Trả về list dict chứa content + metadata cho LLM.
-        """
-        queries = self._expand_query(query)
+        self, query: str, collection_name: str, top_k: int = 5, score_threshold: float = 0.0
+    ):
+        segmented_query = segment_vietnamese(query)
+        queries = self._expand_query(segmented_query)
+        all_hits = {}
 
-        # ── 1. Encode dense vectors (off event-loop thread) ──────────────────
-        dense_vecs: np.ndarray = await asyncio.to_thread(
-            self.embed_model.encode, queries
+        # batch encode simultaneously
+        emb = await asyncio.to_thread(
+            self.embed_model.encode, queries, return_dense=True, return_sparse=True
         )
 
-        # ── 2. Build sparse vectors ───────────────────────────────────────────
-        sparse_vecs = [build_query_sparse_vector(q) for q in queries]
-
-        # ── 3. Qdrant hybrid query (parallel) ────────────────────────────────
+        # async search parallel qdrant requests with correct Hybrid RRF approach
         search_tasks = []
         for i, q in enumerate(queries):
-            dense_list = dense_vecs[i].tolist()
-            sp = sparse_vecs[i]
+            dense_query = emb["dense_vecs"][i].tolist()
+            sparse_query = self._normalize_sparse(emb["lexical_weights"][i])
 
             task = self.client.query_points(
                 collection_name=collection_name,
                 prefetch=[
-                    # Dense prefetch
                     models.Prefetch(
-                        query=dense_list,
+                        query=dense_query,
                         using="dense",
                         limit=50,
                     ),
-                    # Sparse prefetch (BM25)
                     models.Prefetch(
                         query=models.SparseVector(
-                            indices=sp["indices"],
-                            values=sp["values"],
+                            indices=sparse_query["indices"],
+                            values=sparse_query["values"],
                         ),
-                        using="text_sparse",
+                        using="bm25",
                         limit=50,
                     ),
                 ],
-                # Hybrid fusion via RRF
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
                 limit=50,
                 with_payload=True,
             )
             search_tasks.append(task)
 
-        all_hits: dict = {}
         try:
+            # receive results in parallel
             results = await asyncio.gather(*search_tasks)
             for response in results:
                 for hit in response.points:
-                    # Deduplicate by point ID — keep highest score
                     if hit.id not in all_hits or hit.score > all_hits[hit.id].score:
                         all_hits[hit.id] = hit
         except Exception as e:
-            logger.error("Error searching in collection '%s': %s", collection_name, e)
+            logger.error(f"Error searching in collection '{collection_name}': {e}")
             raise RuntimeError("Không thể truy cập dữ liệu của session này.")
 
         if not all_hits:
-            logger.warning("No hits returned from Qdrant.")
             return []
 
         unique_hits = list(all_hits.values())
-        logger.info("Qdrant returned %d unique hits before rerank.", len(unique_hits))
 
-        # ── 4. CrossEncoder Rerank ────────────────────────────────────────────
-        passages = [hit.payload.get("content_text", "") for hit in unique_hits]
+        # rerank
+        passages = [
+            hit.payload.get("content_text", "")
+            for hit in unique_hits
+        ]
         rerank_results = await asyncio.to_thread(
             self.reranker.rank,
             query,
             passages,
             return_documents=True,
-            top_k=min(len(passages), top_k * 4),
+            top_k=min(len(passages), top_k * 4),  # get more for filter buffer
         )
 
-        # ── 5. Semantic Diversity Filter ──────────────────────────────────────
-        top_candidate_indices = [
-            res["corpus_id"]
-            for res in rerank_results
-            if res["score"] >= score_threshold
+        # semantic diversity filter
+        final_docs = []
+        selected_embs = []
+
+        # get dense vectors to calculate similarity
+        top_candidates_idx = [
+            res["corpus_id"] for res in rerank_results if res["score"] >= score_threshold
         ]
         top_texts = [
-            unique_hits[idx].payload.get("content_text", "")
-            for idx in top_candidate_indices
+            unique_hits[idx].payload.get("content_text", "") for idx in top_candidates_idx
         ]
 
         if not top_texts:
             return []
 
-        # Re-encode để tính cosine similarity cho diversity filter
-        candidate_embs: np.ndarray = await asyncio.to_thread(
-            self.embed_model.encode, top_texts
+        candidate_embs = await asyncio.to_thread(
+            self.embed_model.encode, top_texts, return_dense=True
         )
-
-        final_docs = []
-        selected_embs = []
+        dense_embs = candidate_embs["dense_vecs"]
 
         for idx, text in enumerate(top_texts):
-            original_hit = unique_hits[top_candidate_indices[idx]]
-            current_emb = candidate_embs[idx]
+            original_hit = unique_hits[top_candidates_idx[idx]]
+            current_emb = dense_embs[idx]
 
+            # add doc if no docs selected yet
             if not selected_embs:
                 final_docs.append(self._format_hit(original_hit, rerank_results[idx]["score"]))
                 selected_embs.append(current_emb)
                 continue
 
-            # Cosine similarity với các doc đã chọn
-            selected_arr = np.array(selected_embs)
-            sims = np.dot(selected_arr, current_emb) / (
-                np.linalg.norm(selected_arr, axis=1) * np.linalg.norm(current_emb) + 1e-8
+            # calc cosine sim with selected docs
+            sims = np.dot(selected_embs, current_emb) / (
+                np.linalg.norm(selected_embs, axis=1) * np.linalg.norm(current_emb)
             )
 
-            # Thêm vào nếu đủ đa dạng (sim < 0.85)
+            # select if sim is low
             if np.max(sims) < 0.85:
                 final_docs.append(self._format_hit(original_hit, rerank_results[idx]["score"]))
                 selected_embs.append(current_emb)
@@ -188,17 +159,17 @@ class RAGRetriever:
             if len(final_docs) >= top_k:
                 break
 
-        logger.info("Retrieved %d diverse documents after rerank.", len(final_docs))
+        logger.info(f"Retrieved {len(final_docs)} diverse documents.")
         return final_docs
 
-    def _format_hit(self, hit, score: float) -> dict:
-        """Chuẩn hoá kết quả trả về cho LLM và submission."""
+    # format search result
+    def _format_hit(self, hit, score):
         return {
-            "content":          hit.payload.get("content_text", ""),
-            "score":            float(score),
-            "relevant_doc":     hit.payload.get("relevant_doc", ""),
+            "content": hit.payload.get("content_text", ""),
+            "score": float(score),
+            "relevant_doc": hit.payload.get("relevant_doc", ""),
             "relevant_article": hit.payload.get("relevant_article", ""),
-            "law_id":           hit.payload.get("law_id", ""),
-            "law_name":         hit.payload.get("law_name", ""),
+            "law_id": hit.payload.get("law_id", ""),
+            "law_name": hit.payload.get("law_name", ""),
             "source_article_no": hit.payload.get("source_article_no", ""),
         }

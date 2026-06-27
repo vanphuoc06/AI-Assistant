@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # qdrant vector db
-    QDRANT_HOST: str = Field(default="104.198.122.197")
+    QDRANT_HOST: str = Field(default="34.180.121.34")
     QDRANT_PORT: int = Field(default=6333)
     QDRANT_API_KEY: str = Field(default="6c635eee6cb87fe9838419cf03b7dc60591355456c4c8326d33c3d2394353705")
 

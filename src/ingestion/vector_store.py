@@ -51,7 +51,7 @@ class VectorStoreManager:
                 )
             },
             sparse_vectors_config={
-                "text-sparse": models.SparseVectorParams(
+                "bm25": models.SparseVectorParams(
                     index=models.SparseIndexParams(on_disk=True)
                 )
             },
@@ -99,7 +99,7 @@ class VectorStoreManager:
                             id=point_id,
                             vector={
                                 "dense": dense_vectors[j].tolist(),
-                                "text-sparse": models.SparseVector(
+                                "bm25": models.SparseVector(
                                     indices=[int(k) for k in sparse_dict.keys()],
                                     values=[float(v) for v in sparse_dict.values()],
                                 ),
@@ -140,7 +140,7 @@ class VectorStoreManager:
                         indices=[int(k) for k in sparse_query.keys()],
                         values=list(sparse_query.values()),
                     ),
-                    using="text-sparse",
+                    using="bm25",
                     limit=top_k,
                 ),
                 models.Prefetch(

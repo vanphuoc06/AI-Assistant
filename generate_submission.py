@@ -216,7 +216,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--collection",
         type=str,
-        default="Dataset_Hybrid_Embbeding_Model_Trained_V1",
+        default="Dataset_Hybrid_BGE_M3_BM25_V1",
         help="Qdrant collection name",
     )
     parser.add_argument(

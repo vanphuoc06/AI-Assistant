@@ -203,7 +203,7 @@ Câu lệnh trên sẽ in ra log chi tiết quá trình Retrieve & Generate, sau
 ### Full Dataset Run
 Để chạy thật sự trên toàn bộ bộ câu hỏi chính thức của BTC (2001 câu):
 ```bash
-uv run generate_submission.py --dataset "..\R2AIStage1DATA.json" --output results.json --collection "Dataset_Hybrid_Embbeding_Model_Trained_V1"
+uv run generate_submission.py --dataset "..\R2AIStage1DATA.json" --output results.json --collection "Dataset_Hybrid_BGE_M3_BM25_V1"
 ```
 *Lưu ý: Quá trình này sẽ ngốn khá nhiều thời gian. Script này đã được tích hợp sẵn cơ chế Checkpoint (Sao lưu tự động): giả sử máy tính bị mất điện hoặc bạn nhấn tổ hợp phím Ctrl+C để dừng lại ngang chừng, lần sau khi bạn gõ lại lệnh trên, script sẽ thông minh tự động tiếp tục công việc tại đúng câu hỏi bị ngắt quãng mà không cần phải thực hiện lại từ điểm xuất phát ban đầu.*
 
@@ -213,7 +213,7 @@ uv run generate_submission.py --dataset "..\R2AIStage1DATA.json" --output result
 
 ### Dataset
 Quá trình đánh giá được thực thi trên một tập dữ liệu **Vietnamese Legal QA Dataset** tùy chỉnh, chứa đựng đa dạng các dạng câu hỏi khác nhau bao gồm cả những câu hỏi không thể nào trả lời được nhằm thử thách khả năng kháng "ảo giác" (hallucination resistance) của hệ thống.
-- Tập dữ liệu này đã được embed và lưu trữ trực tiếp phía trong **Qdrant Vector DB** (cụm collection `Dataset_Hybrid_Embbeding_Model_Trained_V1`).
+- Tập dữ liệu này đã được embed và lưu trữ trực tiếp phía trong **Qdrant Vector DB** (cụm collection `Dataset_Hybrid_BGE_M3_BM25_V1`).
 - Trong xuyên suốt pha truy xuất thông tin, hệ thống tiến hành query chọc thẳng vào Qdrant nhằm đảm bảo một môi trường đánh giá cục bộ 100% hoàn toàn độc lập mà không bị ràng buộc bởi các API service bên ngoài.
 
 ### Evaluation Methodology
