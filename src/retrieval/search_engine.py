@@ -55,7 +55,7 @@ class RAGRetriever:
 
         # batch encode simultaneously
         emb = await asyncio.to_thread(
-            self.embed_model.encode, queries, return_dense=True, return_sparse=True
+            self.embed_model.encode, queries, return_dense=True, return_sparse=True, batch_size=4
         )
 
         # async search parallel qdrant requests with correct Hybrid RRF approach
@@ -70,7 +70,7 @@ class RAGRetriever:
                     models.Prefetch(
                         query=dense_query,
                         using="dense",
-                        limit=50,
+                        limit=max(20, top_k * 2),
                     ),
                     models.Prefetch(
                         query=models.SparseVector(
@@ -78,11 +78,11 @@ class RAGRetriever:
                             values=sparse_query["values"],
                         ),
                         using="bm25",
-                        limit=50,
+                        limit=max(20, top_k * 2),
                     ),
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
-                limit=50,
+                limit=max(20, top_k * 2),
                 with_payload=True,
             )
             search_tasks.append(task)
@@ -114,6 +114,7 @@ class RAGRetriever:
             passages,
             return_documents=True,
             top_k=min(len(passages), top_k * 4),  # get more for filter buffer
+            batch_size=4,
         )
 
         # semantic diversity filter
