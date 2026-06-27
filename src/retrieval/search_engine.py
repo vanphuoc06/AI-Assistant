@@ -21,7 +21,7 @@ def remove_accents(text: str) -> str:
 # main rag retriever class
 class RAGRetriever:
     def __init__(self):
-        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False)
+        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False, timeout=60.0)
         logger.info("Loading BGE-M3 (Embedding)...")
         self.embed_model = ModelManager.get_embed_model()
 

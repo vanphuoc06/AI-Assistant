@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class VectorStoreManager:
     def __init__(self):
         # init async qdrant client
-        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False)
+        self.client = AsyncQdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, api_key=settings.QDRANT_API_KEY, https=False, timeout=60.0)
 
         logger.info("vectorStoreManager is connecting to the embedding model...")
         self.model = ModelManager.get_embed_model()
