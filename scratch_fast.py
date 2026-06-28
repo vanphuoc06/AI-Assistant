@@ -4,7 +4,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 
 async def main():
-    client = AsyncQdrantClient(host="34.180.121.34", port=6333, api_key="6c635eee6cb87fe9838419cf03b7dc60591355456c4c8326d33c3d2394353705", https=False, timeout=60.0)
+    client = AsyncQdrantClient(host="34.84.237.184", port=6333, api_key="6c635eee6cb87fe9838419cf03b7dc60591355456c4c8326d33c3d2394353705", https=False, timeout=60.0)
     
     dense_query = [0.1] * 1024
     sparse_indices = [1, 2, 3]
