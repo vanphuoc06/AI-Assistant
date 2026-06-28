@@ -25,10 +25,14 @@ class RAGRetriever:
         logger.info("Loading BGE-M3 (Embedding)...")
         self.embed_model = ModelManager.get_embed_model()
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.device_count() > 1:
+            device = "cuda:1"
+        else:
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            
         logger.info(f"Loading Reranker on device: {device}...")
         self.reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device, max_length=1024)
-        if device == "cuda":
+        if "cuda" in device:
             self.reranker.model.half()
 
     def _expand_query(self, query: str):
@@ -57,7 +61,7 @@ class RAGRetriever:
 
         # batch encode simultaneously
         emb = await asyncio.to_thread(
-            self.embed_model.encode, queries, return_dense=True, return_sparse=True, batch_size=1, max_length=1024
+            self.embed_model.encode, queries, return_dense=True, return_sparse=True, batch_size=2, max_length=1024
         )
 
         # async search parallel qdrant requests with correct Hybrid RRF approach
@@ -116,7 +120,7 @@ class RAGRetriever:
             passages,
             return_documents=True,
             top_k=min(len(passages), top_k * 4),  # get more for filter buffer
-            batch_size=1,
+            batch_size=2,
         )
 
         # semantic diversity filter
@@ -135,7 +139,7 @@ class RAGRetriever:
             return []
 
         candidate_embs = await asyncio.to_thread(
-            self.embed_model.encode, top_texts, return_dense=True, batch_size=1, max_length=1024
+            self.embed_model.encode, top_texts, return_dense=True, batch_size=2, max_length=1024
         )
         dense_embs = candidate_embs["dense_vecs"]
 
