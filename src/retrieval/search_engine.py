@@ -27,7 +27,9 @@ class RAGRetriever:
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Loading Reranker on device: {device}...")
-        self.reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device, max_length=1024, torch_dtype=torch.float16)
+        self.reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device=device, max_length=1024)
+        if device == "cuda":
+            self.reranker.model.half()
 
     def _expand_query(self, query: str):
         queries = {query.strip(), query.lower().strip(), remove_accents(query).strip()}
