@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # --- LLM config ---
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434/api/chat")
-    LLM_MODEL_NAME: str = Field(default="qwen2.5:7b-instruct")
+    LLM_MODEL_NAME: str = Field(default="qwen2.5")
     LLM_TEMPERATURE: float = Field(default=0.1)
 
     # bot persona
