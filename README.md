@@ -22,54 +22,54 @@ Hệ thống được thiết kế theo mô hình **Tách biệt (Decoupled)** g
 ### Sơ đồ Luồng xử lý (Workflow)
 
 ```mermaid
-graph TD
-    subgraph Frontend [Giao diện Người dùng]
-        UI[Streamlit Chat UI]
+flowchart TD
+    subgraph Frontend [User Interface]
+        UI([Streamlit Chat UI])
     end
 
     subgraph Backend [Backend API FastAPI]
-        API[FastAPI Server]
+        API(FastAPI Server)
         Cache[(Redis Cache)]
     end
 
-    subgraph Ingestion [1. Tiền xử lý dữ liệu]
-        Doc[Tài liệu PDF]
+    subgraph Ingestion [1. Data Ingestion]
+        Doc([PDF Document])
         Parse[PyMuPDF Parsing & Chunking]
         Segment[Underthesea Segmentation]
         Embed[BGE-M3 Embedding]
     end
 
-    subgraph Retrieval [3. Tìm kiếm Vector]
+    subgraph Retrieval [3. Vector Retrieval]
         Expand[Query Expansion]
         Hybrid[Hybrid Search: Dense + Sparse]
         Rerank[BGE-Reranker-v2-m3]
         Filter[Cosine Diversity Filter]
     end
 
-    subgraph Database [2. Cơ sở dữ liệu]
+    subgraph Database [2. Database]
         Qdrant[(Qdrant Vector DB)]
     end
 
-    subgraph Generation [4. Sinh văn bản]
+    subgraph Generation [4. Text Generation]
         LLM[Ollama: Qwen2.5:7b-instruct]
     end
 
-    %% Luồng Ingestion
+    %% Ingestion Flow
     Doc --> Parse --> Segment --> Embed --> Qdrant
 
-    %% Luồng Chat
-    UI -->|1. Đặt câu hỏi| API
-    API <-->|Check| Cache
+    %% Chat Flow
+    UI -->|"1. User Query"| API
+    API <-->|"Check Cache"| Cache
     
-    API -->|2. Tiền xử lý| Expand
+    API -->|"2. Preprocessing"| Expand
     Expand --> Hybrid
-    Hybrid <-->|3. Tìm kiếm Vector| Qdrant
-    Hybrid -->|Top K Ứng viên| Rerank
-    Rerank -->|Top K Chính xác| Filter
+    Hybrid <-->|"3. Vector Search"| Qdrant
+    Hybrid -->|"Top K Candidates"| Rerank
+    Rerank -->|"Top K Refined"| Filter
     
-    Filter -->|4. Ngữ cảnh sạch| LLM
-    LLM -->|5. Trả lời (Stream)| API
-    API -->|Hiển thị từng chữ| UI
+    Filter -->|"4. Clean Context"| LLM
+    LLM -->|"5. Streaming Response"| API
+    API -->|"Display Characters"| UI
 ```
 
 ### Các thành phần cốt lõi:
