@@ -7,7 +7,11 @@
 ![Ollama](https://img.shields.io/badge/Ollama-Qwen2.5-black.svg)
 ![Redis](https://img.shields.io/badge/Redis-Caching-dc382d.svg)
 
-> Hệ thống Retrieval-Augmented Generation (RAG) chuyên biệt cho tiếng Việt, hướng tới môi trường production với kiến trúc linh hoạt, giao diện Streamlit trực quan và khả năng tự động sinh kết quả cho cuộc thi **AI-Guru**.
+> Hệ thống Retrieval-Augmented Generation (RAG) chuyên biệt cho tiếng Việt, hướng tới môi trường production. 
+> 
+> **Dự án tham gia cuộc thi AI-Guru: Truy hồi và Hỏi đáp Văn bản Pháp luật Tiếng Việt**
+> 
+> Hệ thống được thiết kế để hỗ trợ tra cứu các điều khoản trong Luật Doanh nghiệp, đưa ra tư vấn pháp lý sơ bộ và trích dẫn nguồn văn bản chính xác dành cho các doanh nghiệp SME tại Việt Nam. Tuân thủ nghiêm ngặt quy chế cuộc thi: KHÔNG sử dụng API đóng (như GPT-4, Gemini) và giới hạn sử dụng mô hình LLM mã nguồn mở nội bộ (Local LLM) dưới 14B tham số.
 
 ---
 
@@ -19,34 +23,34 @@ Hệ thống được thiết kế theo mô hình **Tách biệt (Decoupled)** g
 
 ```mermaid
 graph TD
-    subgraph Giao diện Người dùng (Frontend)
+    subgraph Frontend [Giao diện Người dùng]
         UI[Streamlit Chat UI]
     end
 
-    subgraph Backend API (FastAPI)
+    subgraph Backend [Backend API FastAPI]
         API[FastAPI Server]
         Cache[(Redis Cache)]
     end
 
-    subgraph 1. Tiền xử lý dữ liệu (Ingestion)
+    subgraph Ingestion [1. Tiền xử lý dữ liệu]
         Doc[Tài liệu PDF]
         Parse[PyMuPDF Parsing & Chunking]
         Segment[Underthesea Segmentation]
         Embed[BGE-M3 Embedding]
     end
 
-    subgraph 3. Tìm kiếm (Retrieval Pipeline)
+    subgraph Retrieval [3. Tìm kiếm Vector]
         Expand[Query Expansion]
         Hybrid[Hybrid Search: Dense + Sparse]
         Rerank[BGE-Reranker-v2-m3]
         Filter[Cosine Diversity Filter]
     end
 
-    subgraph 2. Cơ sở dữ liệu (Database)
+    subgraph Database [2. Cơ sở dữ liệu]
         Qdrant[(Qdrant Vector DB)]
     end
 
-    subgraph 4. Sinh văn bản (Generation)
+    subgraph Generation [4. Sinh văn bản]
         LLM[Ollama: Qwen2.5:7b-instruct]
     end
 
