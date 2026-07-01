@@ -172,4 +172,4 @@ uv run generate_submission.py --dataset "R2AIStage1DATA.json" --output "results.
 ## 5. Tác giả
 
 **Ngô Văn Phước**  
-Email: [24280401@student.hcmus.edu.vn](mailto:24280401@student.hcmus.edu.vn)
+Email: [24280041@student.hcmus.edu.vn](mailto:24280401@student.hcmus.edu.vn)
